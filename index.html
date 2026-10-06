@@ -166,7 +166,7 @@
         <h1>Study<br>Sprint.</h1>
         <p>把腦中的待辦變成清楚的讀書任務，從今天能完成的事情開始。</p>
       </div>
-      <div class="version">Development iteration 1</div>
+      <div class="version">Development iteration 2</div>
     </aside>
 
     <main>
@@ -230,7 +230,7 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    const STORAGE_KEY = "studySprintIteration1";
+    const STORAGE_KEY = "studySprintIteration2";
     const tasks = [];
     let currentPlan = [];
     const form = document.querySelector("#taskForm");
@@ -258,7 +258,19 @@
       return element.innerHTML;
     }
 
-    function rankedTasks() { return [...tasks]; }
+    function priorityFor(task) {
+      const [year, month, day] = task.deadline.split("-").map(Number);
+      const now = new Date();
+      const days = Math.round((Date.UTC(year, month - 1, day) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+      const urgency = days <= 0 ? 55 : days === 1 ? 50 : days <= 3 ? 44 : days <= 7 ? 36 : days <= 14 ? 28 : days <= 30 ? 18 : 8;
+      const duration = task.minutes <= 30 ? 5 : task.minutes <= 60 ? 4 : task.minutes <= 120 ? 3 : task.minutes <= 240 ? 2 : 1;
+      const score = Math.min(100, urgency + task.importance * 8 + duration);
+      return { score, level: score >= 75 ? "High" : score >= 50 ? "Medium" : "Low" };
+    }
+
+    function rankedTasks() {
+      return tasks.map(task => ({ ...task, priority: priorityFor(task) })).sort((a, b) => b.priority.score - a.priority.score || a.deadline.localeCompare(b.deadline));
+    }
 
     function saveState() {}
 
@@ -270,7 +282,7 @@
         return;
       }
       taskList.innerHTML = rankedTasks().map(task => {
-        const priorityMarkup = "";
+        const priorityMarkup = '<span class="priority">Priority ' + task.priority.score + ' · ' + task.priority.level + '</span>';
         return '<article class="task-card"><div class="task-card-top"><div><h4>' + escapeHTML(task.name) + '</h4><span class="importance">Importance ' + task.importance + '</span></div>' + priorityMarkup + '</div><div class="task-meta"><span>' + task.deadline + '</span><span>' + task.minutes + ' 分鐘</span></div><button class="delete" data-delete="' + task.id + '">刪除</button></article>';
       }).join("");
     }
