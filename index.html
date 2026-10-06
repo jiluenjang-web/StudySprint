@@ -166,7 +166,7 @@
         <h1>Study<br>Sprint.</h1>
         <p>把腦中的待辦變成清楚的讀書任務，從今天能完成的事情開始。</p>
       </div>
-      <div class="version">Development iteration 2</div>
+      <div class="version">Development iteration 3</div>
     </aside>
 
     <main>
@@ -212,14 +212,18 @@
           <div>
             <div class="summary-label">今日可用時間</div>
             <div class="time-wrap"><input id="availableMinutes" type="number" min="1" max="1440" placeholder="120"><span>分鐘</span></div>
-            <p class="summary-note">先記下今天能專注投入的時間。</p>
-            
+            <p class="summary-note">系統會依 Priority 由高到低安排今天的任務。</p>
+            <button class="generate-button" id="generatePlan" type="button">Generate My Study Plan</button>
           </div>
           <div class="summary-stat"><strong id="taskCountSummary">0</strong><span>目前任務</span></div>
         </section>
       </section>
 
-      
+      <section class="panel plan-section" id="planSection" hidden>
+        <div class="plan-heading"><h3>Today's Study Plan</h3><div class="planned-total" id="plannedTotal"></div></div>
+        
+        <ol class="timeline" id="planTimeline"></ol>
+      </section>
 
       <section class="panel tasks-section">
         <div class="tasks-heading"><h3>任務清單</h3><span class="task-count" id="taskCount">0</span></div>
@@ -230,7 +234,7 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    const STORAGE_KEY = "studySprintIteration2";
+    const STORAGE_KEY = "studySprintIteration3";
     const tasks = [];
     let currentPlan = [];
     const form = document.querySelector("#taskForm");
@@ -287,7 +291,34 @@
       }).join("");
     }
 
+    function generatePlan() {
+      const available = Number(availableInput.value);
+      if (!Number.isInteger(available) || available < 1) return showToast("請輸入有效的今日可用時間");
+      if (!tasks.length) return showToast("請先新增任務");
+      let remaining = available;
+      currentPlan = [];
+      for (const task of rankedTasks()) {
+        if (remaining <= 0) break;
+        const allocated = Math.min(task.minutes, remaining);
+        currentPlan.push({ task, allocated, completed: false });
+        remaining -= allocated;
+      }
+      renderPlan();
+      saveState();
+    }
+
+    function renderPlan() {
+      const available = Number(availableInput.value);
+      const planned = currentPlan.reduce((sum, item) => sum + item.allocated, 0);
+      document.querySelector("#plannedTotal").textContent = "Planned: " + planned + " / " + available + " minutes";
+      document.querySelector("#planTimeline").innerHTML = currentPlan.map((item, index) => '<li><article class="plan-card' + (item.completed ? ' completed' : '') + '"><div class="plan-card-main"><div><h4>' + escapeHTML(item.task.name) + '</h4><p>Priority ' + item.task.priority.score + ' · ' + item.task.priority.level + ' · 完整任務 ' + item.task.minutes + ' 分鐘</p></div></div><div class="allocation">' + item.allocated + ' min</div></article></li>').join("");
+      document.querySelector("#planSection").hidden = false;
+      
+    }
+
     
+
+    document.querySelector("#generatePlan").addEventListener("click", generatePlan);
 
     form.addEventListener("submit", event => {
       event.preventDefault();
@@ -305,7 +336,7 @@
       if (!valid) return;
       tasks.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2), name, deadline, minutes, importance, createdAt: Date.now() });
       currentPlan = [];
-      
+      document.querySelector("#planSection").hidden = true;
       renderTasks();
       saveState();
       form.reset();
@@ -319,7 +350,7 @@
       const index = tasks.findIndex(task => task.id === button.dataset.delete);
       if (index >= 0) tasks.splice(index, 1);
       currentPlan = [];
-      
+      document.querySelector("#planSection").hidden = true;
       renderTasks();
       saveState();
     });
