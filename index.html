@@ -166,7 +166,7 @@
         <h1>Study<br>Sprint.</h1>
         <p>把腦中的待辦變成清楚的讀書任務，從今天能完成的事情開始。</p>
       </div>
-      <div class="version">Development iteration 3</div>
+      <div class="version">Development iteration 4</div>
     </aside>
 
     <main>
@@ -221,7 +221,10 @@
 
       <section class="panel plan-section" id="planSection" hidden>
         <div class="plan-heading"><h3>Today's Study Plan</h3><div class="planned-total" id="plannedTotal"></div></div>
-        
+        <div class="progress-wrap">
+          <div class="progress-copy"><span>Today's Progress <strong id="progressPercent">0%</strong></span><span id="progressSummary">0 / 0 completed</span></div>
+          <div class="progress-track"><span class="progress-fill" id="progressFill"></span></div>
+        </div>
         <ol class="timeline" id="planTimeline"></ol>
       </section>
 
@@ -234,7 +237,7 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    const STORAGE_KEY = "studySprintIteration3";
+    const STORAGE_KEY = "studySprintIteration4";
     const tasks = [];
     let currentPlan = [];
     const form = document.querySelector("#taskForm");
@@ -276,7 +279,27 @@
       return tasks.map(task => ({ ...task, priority: priorityFor(task) })).sort((a, b) => b.priority.score - a.priority.score || a.deadline.localeCompare(b.deadline));
     }
 
-    function saveState() {}
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks, available: availableInput.value, plan: currentPlan.map(item => ({ taskId: item.task.id, allocated: item.allocated, completed: item.completed })) }));
+    }
+
+    function loadState() {
+      try {
+        const state = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (!state) return;
+        if (Array.isArray(state.tasks)) tasks.push(...state.tasks);
+        availableInput.value = state.available || "";
+        if (Array.isArray(state.plan) && state.plan.length) {
+          currentPlan = state.plan.map(item => {
+            const task = tasks.find(candidate => candidate.id === item.taskId);
+            return task ? { task: { ...task, priority: priorityFor(task) }, allocated: item.allocated, completed: Boolean(item.completed) } : null;
+          }).filter(Boolean);
+          renderPlan();
+        }
+      } catch (error) {
+        showToast("無法讀取舊資料");
+      }
+    }
 
     function renderTasks() {
       document.querySelector("#taskCount").textContent = tasks.length;
@@ -311,12 +334,25 @@
       const available = Number(availableInput.value);
       const planned = currentPlan.reduce((sum, item) => sum + item.allocated, 0);
       document.querySelector("#plannedTotal").textContent = "Planned: " + planned + " / " + available + " minutes";
-      document.querySelector("#planTimeline").innerHTML = currentPlan.map((item, index) => '<li><article class="plan-card' + (item.completed ? ' completed' : '') + '"><div class="plan-card-main"><div><h4>' + escapeHTML(item.task.name) + '</h4><p>Priority ' + item.task.priority.score + ' · ' + item.task.priority.level + ' · 完整任務 ' + item.task.minutes + ' 分鐘</p></div></div><div class="allocation">' + item.allocated + ' min</div></article></li>').join("");
+      document.querySelector("#planTimeline").innerHTML = currentPlan.map((item, index) => '<li><article class="plan-card' + (item.completed ? ' completed' : '') + '"><div class="plan-card-main"><input class="plan-checkbox" type="checkbox" data-plan-index="' + index + '" ' + (item.completed ? 'checked' : '') + '><div><h4>' + escapeHTML(item.task.name) + '</h4><p>Priority ' + item.task.priority.score + ' · ' + item.task.priority.level + ' · 完整任務 ' + item.task.minutes + ' 分鐘</p></div></div><div class="allocation">' + item.allocated + ' min</div></article></li>').join("");
       document.querySelector("#planSection").hidden = false;
-      
+      updateProgress();
     }
 
-    
+    function updateProgress() {
+      const completed = currentPlan.filter(item => item.completed).length;
+      const percent = currentPlan.length ? Math.round(completed / currentPlan.length * 100) : 0;
+      document.querySelector("#progressPercent").textContent = percent + "%";
+      document.querySelector("#progressSummary").textContent = completed + " / " + currentPlan.length + " completed";
+      document.querySelector("#progressFill").style.width = percent + "%";
+    }
+
+    document.querySelector("#planTimeline").addEventListener("change", event => {
+      if (!event.target.matches(".plan-checkbox")) return;
+      currentPlan[Number(event.target.dataset.planIndex)].completed = event.target.checked;
+      renderPlan();
+      saveState();
+    });
 
     document.querySelector("#generatePlan").addEventListener("click", generatePlan);
 
@@ -357,7 +393,7 @@
 
     document.querySelector("#todayLabel").textContent = new Intl.DateTimeFormat("zh-TW", { month: "long", day: "numeric", weekday: "short" }).format(new Date());
     deadlineInput.value = localDate();
-    
+    loadState();
     renderTasks();
   </script>
 </body>
